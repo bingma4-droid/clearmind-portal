@@ -1014,7 +1014,7 @@ async function registerPatient() {
   }
 
   // Create Supabase auth account
-  const { data: authData, error: authErr } = await sb.auth.signUp({ email, password: pass });
+  const { data: authData, error: authErr } = await sb.auth.signUp({ email, password: pass, options: { data: { first_name: first, last_name: last, role: 'patient' } } });
   if (authErr) { showLoginErr(authErr.message); return; }
 
   const userId = authData.user?.id;
