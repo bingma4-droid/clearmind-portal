@@ -394,11 +394,76 @@ input, select, textarea { font-family: inherit; outline: none; }
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo">
-      <div class="login-logo-mark">🧠</div>
+      <div class="login-logo-mark">&#x1F9E0;</div>
       <div>
         <div class="login-logo-text">ClearMind</div>
         <div class="login-logo-sub">PATIENT PORTAL</div>
       </div>
+    </div>
+
+    <!-- Tab switcher -->
+    <div style="display:flex;gap:0;margin-bottom:1.5rem;border:1.5px solid var(--bd2);border-radius:10px;overflow:hidden">
+      <button id="tab-signin" onclick="switchAuthTab('signin')"
+        style="flex:1;padding:0.55rem;font-size:0.82rem;font-weight:600;border:none;cursor:pointer;background:var(--sage);color:#fff;transition:all 0.15s">
+        Sign In
+      </button>
+      <button id="tab-register" onclick="switchAuthTab('register')"
+        style="flex:1;padding:0.55rem;font-size:0.82rem;font-weight:600;border:none;cursor:pointer;background:var(--sf2);color:var(--tx2);transition:all 0.15s">
+        Create Account
+      </button>
+    </div>
+
+    <!-- SIGN IN FORM -->
+    <div id="form-signin">
+      <div class="login-field">
+        <label>Email Address</label>
+        <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email">
+      </div>
+      <div class="login-field">
+        <label>Password</label>
+        <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+      </div>
+      <button class="login-btn" onclick="signIn()">Sign In</button>
+      <div class="login-reset" onclick="sendReset()">Forgot your password?</div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="form-register" style="display:none">
+      <div style="font-size:0.8rem;color:var(--tx2);margin-bottom:1rem;line-height:1.5;background:var(--sagl);border-radius:8px;padding:0.65rem 0.8rem">
+        Your name, date of birth and email must match what your care team has on file.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+        <div class="login-field">
+          <label>First Name</label>
+          <input type="text" id="reg-first" placeholder="First name">
+        </div>
+        <div class="login-field">
+          <label>Last Name</label>
+          <input type="text" id="reg-last" placeholder="Last name">
+        </div>
+      </div>
+      <div class="login-field">
+        <label>Date of Birth</label>
+        <input type="date" id="reg-dob">
+      </div>
+      <div class="login-field">
+        <label>Email Address</label>
+        <input type="email" id="reg-email" placeholder="your@email.com">
+      </div>
+      <div class="login-field">
+        <label>Create Password</label>
+        <input type="password" id="reg-pass" placeholder="At least 8 characters">
+      </div>
+      <div class="login-field">
+        <label>Confirm Password</label>
+        <input type="password" id="reg-pass2" placeholder="Repeat password">
+      </div>
+      <button class="login-btn" onclick="registerPatient()">Create My Account</button>
+    </div>
+
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
     </div>
     <div class="login-title">Welcome back</div>
     <div class="login-sub">Sign in to view your appointments, messages, and care information.</div>
@@ -896,6 +961,83 @@ let gad7Answers   = {};
 // ════════════════════════════════════════════════
 // AUTH
 // ════════════════════════════════════════════════
+function switchAuthTab(tab) {
+  const isSignin = tab === 'signin';
+  document.getElementById('form-signin').style.display   = isSignin ? '' : 'none';
+  document.getElementById('form-register').style.display = isSignin ? 'none' : '';
+  document.getElementById('tab-signin').style.background   = isSignin ? 'var(--sage)' : 'var(--sf2)';
+  document.getElementById('tab-signin').style.color        = isSignin ? '#fff' : 'var(--tx2)';
+  document.getElementById('tab-register').style.background = isSignin ? 'var(--sf2)' : 'var(--sage)';
+  document.getElementById('tab-register').style.color      = isSignin ? 'var(--tx2)' : '#fff';
+  document.getElementById('login-err').style.display = 'none';
+}
+
+async function registerPatient() {
+  const first = document.getElementById('reg-first').value.trim();
+  const last  = document.getElementById('reg-last').value.trim();
+  const dob   = document.getElementById('reg-dob').value;
+  const email = document.getElementById('reg-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+
+  if (!first || !last || !dob || !email || !pass) { showLoginErr('Please fill in all fields.'); return; }
+  if (pass !== pass2) { showLoginErr('Passwords do not match.'); return; }
+  if (pass.length < 8) { showLoginErr('Password must be at least 8 characters.'); return; }
+
+  // Look up patient by email + dob to verify identity
+  const { data: patients, error: lookupErr } = await sb
+    .from('patients')
+    .select('id, first_name, last_name, date_of_birth, email, portal_user_id')
+    .ilike('email', email);
+
+  if (lookupErr || !patients || !patients.length) {
+    showLoginErr('No patient record found with that email. Please contact your care team.');
+    return;
+  }
+
+  // Match on name + dob
+  const match = patients.find(p => {
+    const dobMatch = (p.date_of_birth || '').substring(0, 10) === dob;
+    const firstMatch = (p.first_name || '').toLowerCase() === first.toLowerCase();
+    const lastMatch  = (p.last_name  || '').toLowerCase() === last.toLowerCase();
+    return dobMatch && firstMatch && lastMatch;
+  });
+
+  if (!match) {
+    showLoginErr('Name or date of birth does not match our records. Please contact your care team.');
+    return;
+  }
+
+  if (match.portal_user_id) {
+    showLoginErr('A portal account already exists for this patient. Please sign in or reset your password.');
+    return;
+  }
+
+  // Create Supabase auth account
+  const { data: authData, error: authErr } = await sb.auth.signUp({ email, password: pass });
+  if (authErr) { showLoginErr(authErr.message); return; }
+
+  const userId = authData.user?.id;
+  if (!userId) { showLoginErr('Account created — please check your email to confirm, then sign in.'); return; }
+
+  // Link patient record to new auth user
+  const { error: updateErr } = await sb.from('patients')
+    .update({ portal_user_id: userId })
+    .eq('id', match.id);
+
+  if (updateErr) { showLoginErr('Account created but could not link record. Contact your care team.'); return; }
+
+  // Auto sign in
+  const { data: signInData, error: signInErr } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (signInErr) {
+    showLoginErr('Account created! Please sign in with your new credentials.');
+    switchAuthTab('signin');
+    return;
+  }
+  currentUser = signInData.user;
+  await bootApp();
+}
+
 async function signIn() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
