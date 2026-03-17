@@ -2293,10 +2293,18 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
       </div>
 
       <div id="cst-cpt-banner" style="margin-bottom:1rem">
-        <div style="background:var(--bll);border:1px solid rgba(58,110,168,0.25);border-radius:10px;padding:0.6rem 1rem;display:flex;align-items:center;gap:1rem">
-          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--blu);font-size:1rem" id="cst-cpt-code">H2015</span>
-          <span style="font-size:0.82rem;color:var(--slate)" id="cst-cpt-desc">CST Individual (per 15 min)</span>
-          <span style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;color:var(--sage);margin-left:0.5rem" id="cst-modifier-preview"></span>
+        <div style="background:var(--bll);border:1px solid rgba(58,110,168,0.25);border-radius:10px;padding:0.75rem 1rem">
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+            <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--blu);font-size:1rem" id="cst-cpt-code">H2015</span>
+            <span style="font-size:0.82rem;color:var(--slate)" id="cst-cpt-desc">CST Individual (per 15 min)</span>
+          </div>
+          <div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+            <span style="font-size:0.7rem;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:0.5px">Billing Modifiers:</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--sage);background:var(--sagl);padding:0.2rem 0.6rem;border-radius:6px" id="cst-modifier-1">HT</span>
+            <span style="font-size:0.75rem;color:var(--mut)">+</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--sage);background:var(--sagl);padding:0.2rem 0.6rem;border-radius:6px" id="cst-modifier-2">—</span>
+            <span style="font-size:0.72rem;color:var(--tx2)" id="cst-modifier-label">Sign in to see your modifier</span>
+          </div>
         </div>
       </div>
 
@@ -5346,8 +5354,7 @@ function pickNoteCategory(cat) {
     document.getElementById('note-modal-title').textContent = '🏘️ Community Based Note';
     document.getElementById('note-form-cst').style.display = 'block';
     // Show modifier preview for current clinician
-    const modPrev = document.getElementById('cst-modifier-preview');
-    if (modPrev) modPrev.textContent = '· Modifier: HT ' + getCSTModifier();
+    updateCSTModifierPreview();
     populateNotePatSelect('cst-patient');
     document.getElementById('cst-patient').onchange = function() {
       onNotePatientChange(this.value, 'cst');
@@ -5664,8 +5671,28 @@ function getCSTModifier() {
 }
 
 function buildCSTModifierString() {
-  const roleModifier = getCSTModifier();
-  return 'HT ' + roleModifier; // HT always first (team), role modifier second
+  return 'HT ' + getCSTModifier();
+}
+
+function updateCSTModifierPreview() {
+  const m2el = document.getElementById('cst-modifier-2');
+  const lblEl = document.getElementById('cst-modifier-label');
+  if (!m2el) return;
+  if (!currentProfile) {
+    m2el.textContent = '—';
+    if (lblEl) lblEl.textContent = 'Profile not loaded';
+    return;
+  }
+  const mod = getCSTModifier();
+  const roleLabels = {
+    'U1': 'Peer Support Specialist',
+    'HF': 'Substance Use Therapist (LCAS)',
+    'HM': 'Paraprofessional',
+    'HN': 'Qualified Professional',
+    'HO': 'Supervising Professional (LPC/LCSW/MD)'
+  };
+  m2el.textContent = mod;
+  if (lblEl) lblEl.textContent = roleLabels[mod] || 'Role modifier';
 }
 
 async function saveCSTNote(status) {
