@@ -2294,16 +2294,23 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 
       <div id="cst-cpt-banner" style="margin-bottom:1rem">
         <div style="background:var(--bll);border:1px solid rgba(58,110,168,0.25);border-radius:10px;padding:0.75rem 1rem">
-          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.6rem">
             <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--blu);font-size:1rem" id="cst-cpt-code">H2015</span>
             <span style="font-size:0.82rem;color:var(--slate)" id="cst-cpt-desc">CST Individual (per 15 min)</span>
           </div>
-          <div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-            <span style="font-size:0.7rem;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:0.5px">Billing Modifiers:</span>
-            <span style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--sage);background:var(--sagl);padding:0.2rem 0.6rem;border-radius:6px" id="cst-modifier-1">HT</span>
+          <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+            <span style="font-size:0.7rem;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:0.5px">Modifiers:</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--sage);background:var(--sagl);padding:0.2rem 0.6rem;border-radius:6px">HT</span>
             <span style="font-size:0.75rem;color:var(--mut)">+</span>
-            <span style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--sage);background:var(--sagl);padding:0.2rem 0.6rem;border-radius:6px" id="cst-modifier-2">—</span>
-            <span style="font-size:0.72rem;color:var(--tx2)" id="cst-modifier-label">Sign in to see your modifier</span>
+            <select id="cst-role-modifier"
+              style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--sage);background:var(--sagl);border:1px solid var(--sagl2);border-radius:6px;padding:0.2rem 0.5rem;cursor:pointer">
+              <option value="HO">HO — Supervisor / LPC / LCSW / MD</option>
+              <option value="HN">HN — Qualified Professional</option>
+              <option value="HM">HM — Paraprofessional</option>
+              <option value="U1">U1 — Peer Support Specialist (CPSS)</option>
+              <option value="HF">HF — Substance Use Therapist (LCAS)</option>
+            </select>
+            <span style="font-size:0.72rem;color:var(--tx2)" id="cst-modifier-label">Pre-set from your role</span>
           </div>
         </div>
       </div>
@@ -2786,6 +2793,7 @@ async function loadAppointments(){
   try{
     const{data,error}=await sb.from('appointments')
       .select('*,patient:patients(first_name,last_name),clinician:profiles!clinician_id(first_name,last_name)')
+      .eq('organization_id', currentOrgId)
       .order('appt_date').order('start_time');
     if(error){console.warn('appointments table:',error.message);return;}
     APPTS=(data||[]).map(a=>({
@@ -3278,7 +3286,7 @@ async function createCosignAlert(noteId, noteData) {
     ? PATS.find(p => p.id == noteData.patId).first + ' ' + PATS.find(p => p.id == noteData.patId).last
     : 'Unknown';
   try {
-    await sb.from('alerts').insert([{
+    await sb.from('alerts').insert([{ organization_id: currentOrgId,
       alert_type: 'amber',
       title: 'Co-signature Required',
       detail: `${currentProfile?.first_name} ${currentProfile?.last_name} signed a ${noteData.type} note for ${patName} - requires supervisor co-signature`,
@@ -3553,7 +3561,7 @@ async function loadAdminUsers() {
   if (!el) return;
   el.innerHTML = '<div style="color:var(--mut);font-size:0.83rem;text-align:center;padding:1rem">Loading...</div>';
   try {
-    const { data, error } = await sb.from('profiles').select('*').order('last_name');
+    const { data, error } = await sb.from('profiles').select('*').eq('organization_id', currentOrgId).order('last_name');
     if (error) throw error;
     if (!data || !data.length) {
       el.innerHTML = '<div style="color:var(--mut);font-size:0.83rem;text-align:center;padding:1rem">No staff accounts found</div>';
@@ -3666,6 +3674,8 @@ function getTimeOfDay() {
 // SUPABASE CONFIG & AUTH
 // ════════════════════════════════════════════════
 const SUPABASE_URL  = 'https://yxlivqiqydiyoyvtlrsq.supabase.co';
+const ORG_ID = '55bc8953-8f44-400c-818c-86a4b9f75791'; // Alamance Academy
+let currentOrgId = ORG_ID; // Will be dynamic in multi-tenant future
 const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4bGl2cWlxeWRpeW95dnRscnNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MzU1MzQsImV4cCI6MjA4ODMxMTUzNH0.bf_RIzNceP0DHX0YP0G3-0Kwh-LGgaofw3vYnfHyYjE';
 const REG_CODE      = 'AAregkey26';
 // Guard: verify Supabase library loaded correctly
@@ -3843,7 +3853,7 @@ async function register() {
   btn.disabled = true; btn.textContent = 'Creating account…';
   const { error } = await sb.auth.signUp({
     email, password: pass,
-    options: { data: { first_name: first, last_name: last, role, credentials: creds } }
+    options: { data: { first_name: first, last_name: last, role, credentials: creds, organization_id: ORG_ID } }
   });
   if (error) {
     showLoginErr(error.message);
@@ -3888,7 +3898,7 @@ async function signOut() {
 async function loadPatients() {
   const { data, error } = await sb.from('patients').select(`
     *, diagnoses(*), assigned_clinician:profiles!assigned_clinician_id(first_name,last_name,credentials)
-  `).order('last_name');
+  `).eq('organization_id', currentOrgId).order('last_name');
   if (error) { console.error('loadPatients:', error); return; }
   PATS = (data||[]).map((p, idx) => ({
     id: p.id, mrn: 'MRN-' + String(idx+1).padStart(3,'0'),
@@ -3911,6 +3921,7 @@ async function loadPatients() {
 async function loadAlerts() {
   const { data, error } = await sb.from('alerts')
     .select('*, patient:patients(first_name,last_name)')
+    .eq('organization_id', currentOrgId)
     .eq('resolved', false)
     .order('created_at', { ascending: false });
   if (error) { console.error('loadAlerts:', error); return; }
@@ -3926,6 +3937,7 @@ async function loadAlerts() {
 async function loadNotes() {
   const { data, error } = await sb.from('notes')
     .select('*, patient:patients(first_name,last_name), author:profiles!author_id(first_name,last_name)')
+    .eq('organization_id', currentOrgId)
     .order('service_date', { ascending: false })
     .limit(100);
   if (error) { console.error('loadNotes:', error); return; }
@@ -3955,6 +3967,7 @@ async function loadNotes() {
 async function saveNoteToDB(noteData) {
   const isSigned = ['signed','cosign_pending'].includes(noteData.status);
   const { data, error } = await sb.from('notes').insert([{
+    organization_id:  currentOrgId,
     patient_id:       noteData.patId,
     note_type:        noteData.type,
     cpt_code:         noteData.cptCode,
@@ -3983,6 +3996,7 @@ async function savePatientToDB(patData) {
   const { count } = await sb.from('patients').select('*', {count:'exact',head:true});
   const mrn = 'MRN-' + String((count||0)+1).padStart(3,'0');
   const { data, error } = await sb.from('patients').insert([{
+    organization_id:     currentOrgId,
     first_name:          patData.first,
     last_name:           patData.last,
     date_of_birth:       patData.dob || null,
@@ -4907,7 +4921,7 @@ async function confirmCSVImport() {
         emergency_contact: row.emergency_contact || null,
         is_active: true,
       };
-      const res = await sb.from('patients').insert([patData]).select().single();
+      patData.organization_id = currentOrgId; const res = await sb.from('patients').insert([patData]).select().single();
       if (res.error) throw res.error;
       const saved = res.data;
       if (row.diagnoses) {
@@ -5353,7 +5367,7 @@ function pickNoteCategory(cat) {
   } else if (cat === 'cst') {
     document.getElementById('note-modal-title').textContent = '🏘️ Community Based Note';
     document.getElementById('note-form-cst').style.display = 'block';
-    // Show modifier preview for current clinician
+    // Show modifier for current clinician
     updateCSTModifierPreview();
     populateNotePatSelect('cst-patient');
     document.getElementById('cst-patient').onchange = function() {
@@ -5671,28 +5685,16 @@ function getCSTModifier() {
 }
 
 function buildCSTModifierString() {
-  return 'HT ' + getCSTModifier();
+  const sel = document.getElementById('cst-role-modifier');
+  return 'HT ' + (sel ? sel.value : getCSTModifier());
 }
 
 function updateCSTModifierPreview() {
-  const m2el = document.getElementById('cst-modifier-2');
-  const lblEl = document.getElementById('cst-modifier-label');
-  if (!m2el) return;
-  if (!currentProfile) {
-    m2el.textContent = '—';
-    if (lblEl) lblEl.textContent = 'Profile not loaded';
-    return;
-  }
-  const mod = getCSTModifier();
-  const roleLabels = {
-    'U1': 'Peer Support Specialist',
-    'HF': 'Substance Use Therapist (LCAS)',
-    'HM': 'Paraprofessional',
-    'HN': 'Qualified Professional',
-    'HO': 'Supervising Professional (LPC/LCSW/MD)'
-  };
-  m2el.textContent = mod;
-  if (lblEl) lblEl.textContent = roleLabels[mod] || 'Role modifier';
+  const sel = document.getElementById('cst-role-modifier');
+  const lbl = document.getElementById('cst-modifier-label');
+  if (!sel) return;
+  sel.value = getCSTModifier();
+  if (lbl) lbl.textContent = 'Pre-set from your role';
 }
 
 async function saveCSTNote(status) {
@@ -5934,7 +5936,7 @@ async function loadPatientMeds(patId) {
   if (window.SB) {
     try {
       const [medsRes, allergiesRes, pharmacyRes] = await Promise.all([
-        SB.from('medications').select('*').eq('patient_id', pid).order('created_at', { ascending: false }),
+        SB.from('medications').select('*').eq('organization_id', currentOrgId).eq('patient_id', pid).order('created_at', { ascending: false }),
         SB.from('allergies').select('*').eq('patient_id', pid),
         SB.from('pharmacy').select('*').eq('patient_id', pid).maybeSingle(),
       ]);
@@ -6158,7 +6160,7 @@ async function saveMedication() {
       if (editId) {
         res = await SB.from('medications').update(entry).eq('id', editId).select().single();
       } else {
-        res = await SB.from('medications').insert(entry).select().single();
+        entry.organization_id = currentOrgId; res = await SB.from('medications').insert(entry).select().single();
       }
       if (res.error) throw new Error(res.error.message);
       entry.id = res.data.id;
@@ -6382,7 +6384,7 @@ async function loadMessages() {
     const uid = currentUser.id;
     const { data, error } = await SB
       .from('messages')
-      .select('*')
+      .select('*').eq('organization_id', currentOrgId)
       .or(`recipient_id.eq.${uid},sender_id.eq.${uid}`)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -6574,7 +6576,7 @@ async function sendMessage() {
 
   try {
     if (window.SB) {
-      const { data, error } = await SB.from('messages').insert(entry).select().single();
+      entry.organization_id = currentOrgId; const { data, error } = await SB.from('messages').insert(entry).select().single();
       if (error) throw error;
       entry.id = data.id;
       entry.created_at = data.created_at;
@@ -6649,7 +6651,7 @@ async function loadConsents(patId) {
   const pid = String(patId);
   if (window.SB) {
     try {
-      const { data } = await SB.from('consents').select('*').eq('patient_id', pid).order('signed_date', { ascending: false });
+      const { data } = await SB.from('consents').select('*').eq('organization_id', currentOrgId).eq('patient_id', pid).order('signed_date', { ascending: false });
       CONSENTS[pid] = data || [];
     } catch(e) { console.warn('loadConsents error:', e); }
   }
@@ -6831,7 +6833,7 @@ async function saveConsent() {
       if (editId) {
         res = await SB.from('consents').update(entry).eq('id', editId).select().single();
       } else {
-        res = await SB.from('consents').insert(entry).select().single();
+        entry.organization_id = currentOrgId; res = await SB.from('consents').insert(entry).select().single();
       }
       if (res.error) throw new Error(res.error.message);
       entry.id = res.data.id;
@@ -6980,7 +6982,7 @@ async function loadOutcomes(patId) {
   const pid = String(patId);
   if (window.SB) {
     try {
-      const { data } = await SB.from('outcome_measures').select('*').eq('patient_id', pid).order('administered_date', { ascending: false });
+      const { data } = await SB.from('outcome_measures').select('*').eq('organization_id', currentOrgId).eq('patient_id', pid).order('administered_date', { ascending: false });
       OUTCOMES[pid] = data || [];
     } catch(e) { console.warn('loadOutcomes error:', e); }
   }
@@ -7095,7 +7097,7 @@ async function saveOutcome() {
 
   try {
     if (window.SB) {
-      const { data, error } = await SB.from('outcome_measures').insert(entry).select().single();
+      entry.organization_id = currentOrgId; const { data, error } = await SB.from('outcome_measures').insert(entry).select().single();
       if (error) throw new Error(error.message);
       entry.id = data.id;
     } else {
@@ -7550,7 +7552,7 @@ async function loadDischarge(patId) {
   const pid = String(patId);
   if (window.SB) {
     try {
-      const { data } = await SB.from('discharge_summaries').select('*').eq('patient_id', pid).maybeSingle();
+      const { data } = await SB.from('discharge_summaries').select('*').eq('organization_id', currentOrgId).eq('patient_id', pid).maybeSingle();
       if (data) DISCHARGES[pid] = data;
     } catch(e) { console.warn('loadDischarge error:', e); }
   }
@@ -7694,7 +7696,7 @@ async function saveDischarge() {
       if (editId) {
         res = await SB.from('discharge_summaries').update(entry).eq('id', editId).select().single();
       } else {
-        res = await SB.from('discharge_summaries').insert(entry).select().single();
+        entry.organization_id = currentOrgId; res = await SB.from('discharge_summaries').insert(entry).select().single();
       }
       if (res.error) throw new Error(res.error.message);
       entry.id = res.data.id;
@@ -7771,7 +7773,7 @@ async function loadIncidents(patId) {
   const pid = String(patId);
   if (window.SB) {
     try {
-      const { data } = await SB.from('incident_reports').select('*').eq('patient_id', pid).order('incident_date', { ascending: false });
+      const { data } = await SB.from('incident_reports').select('*').eq('organization_id', currentOrgId).eq('patient_id', pid).order('incident_date', { ascending: false });
       INCIDENTS[pid] = data || [];
     } catch(e) { console.warn('loadIncidents error:', e); }
   }
@@ -7781,7 +7783,7 @@ async function loadIncidents(patId) {
 async function loadAllIncidents() {
   if (window.SB) {
     try {
-      const { data } = await SB.from('incident_reports').select('*').order('incident_date', { ascending: false });
+      const { data } = await SB.from('incident_reports').select('*').eq('organization_id', currentOrgId).order('incident_date', { ascending: false });
       ALL_INCIDENTS = data || [];
       // Also distribute to per-patient cache
       ALL_INCIDENTS.forEach(i => {
@@ -7908,7 +7910,7 @@ async function saveIncident() {
       if (editId) {
         res = await SB.from('incident_reports').update(entry).eq('id', editId).select().single();
       } else {
-        res = await SB.from('incident_reports').insert(entry).select().single();
+        entry.organization_id = currentOrgId; res = await SB.from('incident_reports').insert(entry).select().single();
       }
       if (res.error) throw new Error(res.error.message);
       entry.id = res.data.id;
@@ -7995,7 +7997,7 @@ async function initAuthPage() {
 
   if (window.SB) {
     try {
-      const { data } = await SB.from('authorizations').select('*').order('end_date', { ascending: true });
+      const { data } = await SB.from('authorizations').select('*').eq('organization_id', currentOrgId).order('end_date', { ascending: true });
       AUTHS = data || [];
     } catch(e) { console.warn('loadAuths error:', e); }
   }
@@ -8229,7 +8231,7 @@ async function saveAuth() {
       if (editId) {
         res = await SB.from('authorizations').update(entry).eq('id', editId).select().single();
       } else {
-        res = await SB.from('authorizations').insert(entry).select().single();
+        entry.organization_id = currentOrgId; res = await SB.from('authorizations').insert(entry).select().single();
       }
       if (res.error) throw new Error(res.error.message);
       entry.id = res.data.id;
@@ -8320,7 +8322,7 @@ async function initBillingPage() {
   // Load auths if not already loaded
   if (!AUTHS.length && window.SB) {
     try {
-      const { data } = await SB.from('authorizations').select('*');
+      const { data } = await SB.from('authorizations').select('*').eq('organization_id', currentOrgId);
       AUTHS = data || [];
     } catch(e) {}
   }
@@ -9316,7 +9318,7 @@ async function saveAssessmentToSupabase(data) {
     if (error) throw error;
     return editingAssessmentId;
   } else {
-    const { data: inserted, error } = await sb.from('assessments').insert([row]).select('id').single();
+    row.organization_id = currentOrgId; const { data: inserted, error } = await sb.from('assessments').insert([row]).select('id').single();
     if (error) throw error;
     return inserted.id;
   }
@@ -9383,6 +9385,7 @@ async function loadAssessments() {
   try {
     const { data, error } = await sb.from('assessments')
       .select('id,patient_name,date_of_assessment,assessor,cpt_codes,diagnoses_full,status,risk_flag,services_recommended,locus_score,presenting_problem,patient_id')
+      .eq('organization_id', currentOrgId)
       .order('date_of_assessment', { ascending: false });
     if (error) throw error;
     ASSESSMENTS = data || [];
